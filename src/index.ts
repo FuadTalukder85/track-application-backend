@@ -4,6 +4,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { connectDB } from './config/db';
 import jobApplicationRoutes from './routes/jobApplicationRoutes';
+import authRoutes from './routes/authRoutes';
 import { errorHandler } from './middlewares/errorHandler';
 
 // Load environment variables
@@ -53,6 +54,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/applications', jobApplicationRoutes);
 
 // 404 Handler for undefined routes
