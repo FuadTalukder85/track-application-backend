@@ -12,9 +12,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Connect to MongoDB
-connectDB();
-
 // Middlewares
 app.use(
   cors({
@@ -28,7 +25,25 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health Check
+// Ensure Database is connected for every request (Serverless & Dedicated)
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Root & Health Check
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Job Application Tracker API is active',
+    docs: '/api/applications',
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -51,10 +66,13 @@ app.use('*', (req, res) => {
 // Global Error Handler
 app.use(errorHandler);
 
-// Start Server
-app.listen(PORT, () => {
-  console.log(`[Server] Job Application Tracker Backend running on port ${PORT}`);
-  console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start Server locally (avoid app.listen in Vercel serverless environment)
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`[Server] Job Application Tracker Backend running on port ${PORT}`);
+    console.log(`[Server] Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
 
 export default app;
+
