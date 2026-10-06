@@ -5,10 +5,16 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "start": "node api.js && node dist/index.js",
+    "dev": "node api.js && tsx watch src/index.ts"
   },
-  "keywords": ["job", "tracker", "api", "express", "mongoose"],
+  "keywords": [
+    "job",
+    "tracker",
+    "api",
+    "express",
+    "mongoose"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
