@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
+import { User } from '../models/User';
 
 // Default authorized credentials
-const DEFAULT_EMAIL = (process.env.ADMIN_EMAIL || 'webfuadtk@gmail.com').toLowerCase().trim();
+const DEFAULT_EMAIL = (process.env.ADMIN_EMAIL || 'fuadtalukder25@gmail.com').toLowerCase().trim();
 const DEFAULT_PASSWORD = process.env.ADMIN_PASSWORD || '56867585';
 const JWT_SECRET = process.env.JWT_SECRET || 'careertrack-secret-key-2026-secure-auth';
 
@@ -47,7 +48,7 @@ export function verifyToken(token: string): any | null {
 
 /**
  * @desc Login user
- * @route POST /api/auth/login
+ * @route POST /api/auth/login or /auth/login
  */
 export const login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -64,30 +65,60 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
     const normalizedEmail = String(email).toLowerCase().trim();
     const cleanPassword = String(password);
 
-    if (normalizedEmail !== DEFAULT_EMAIL || cleanPassword !== DEFAULT_PASSWORD) {
-      res.status(401).json({
-        success: false,
-        message: 'Invalid email or password',
+    // 1. Check MongoDB database User collection first
+    const dbUser = await User.findOne({ email: normalizedEmail });
+    if (dbUser && dbUser.comparePassword(cleanPassword)) {
+      const user = {
+        id: dbUser._id.toString(),
+        name: dbUser.name,
+        email: dbUser.email,
+        role: dbUser.role,
+      };
+
+      const token = generateToken(user);
+
+      res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          user,
+          token,
+        },
       });
       return;
     }
 
-    const user = {
-      id: 'usr_fuad_01',
-      name: 'Fuad',
-      email: DEFAULT_EMAIL,
-      role: 'admin',
-    };
+    // 2. Check default/env credentials fallback
+    const validFallbackEmails = [
+      DEFAULT_EMAIL,
+      'fuadtalukder25@gmail.com',
+      'webfuadtk@gmail.com',
+    ];
 
-    const token = generateToken(user);
+    if (validFallbackEmails.includes(normalizedEmail) && cleanPassword === DEFAULT_PASSWORD) {
+      const user = {
+        id: 'usr_fuad_01',
+        name: 'Fuad Talukder',
+        email: normalizedEmail,
+        role: 'admin',
+      };
 
-    res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      data: {
-        user,
-        token,
-      },
+      const token = generateToken(user);
+
+      res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        data: {
+          user,
+          token,
+        },
+      });
+      return;
+    }
+
+    res.status(401).json({
+      success: false,
+      message: 'Invalid email or password',
     });
   } catch (error) {
     next(error);
@@ -96,7 +127,7 @@ export const login = async (req: Request, res: Response, next: NextFunction): Pr
 
 /**
  * @desc Get current authenticated user
- * @route GET /api/auth/me
+ * @route GET /api/auth/me or /auth/me
  */
 export const getMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -120,15 +151,25 @@ export const getMe = async (req: Request, res: Response, next: NextFunction): Pr
       return;
     }
 
+    // Attempt to fetch latest profile from DB if exists
+    const dbUser = await User.findOne({ email: decoded.email }).select('-password');
+
     res.status(200).json({
       success: true,
       data: {
-        user: {
-          id: decoded.id,
-          name: decoded.name,
-          email: decoded.email,
-          role: decoded.role,
-        },
+        user: dbUser
+          ? {
+              id: dbUser._id.toString(),
+              name: dbUser.name,
+              email: dbUser.email,
+              role: dbUser.role,
+            }
+          : {
+              id: decoded.id,
+              name: decoded.name,
+              email: decoded.email,
+              role: decoded.role,
+            },
       },
     });
   } catch (error) {

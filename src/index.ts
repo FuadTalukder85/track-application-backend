@@ -13,13 +13,57 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// CORS configuration
+const configuredOrigins = (process.env.CLIENT_URL || '')
+  .split(',')
+  .map((url) => url.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const defaultOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'https://track-application.vercel.app',
+  'https://track-application-weld.vercel.app',
+];
+
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...configuredOrigins]));
+
+const corsOptions: cors.CorsOptions = {
+  origin: (requestOrigin, callback) => {
+    // Allow non-browser requests (e.g. mobile apps, curl, server-to-server)
+    if (!requestOrigin) {
+      return callback(null, true);
+    }
+
+    const normalizedOrigin = requestOrigin.replace(/\/+$/, '');
+
+    let isVercelDomain = false;
+    try {
+      const parsedUrl = new URL(requestOrigin);
+      isVercelDomain = parsedUrl.hostname.endsWith('.vercel.app');
+    } catch {
+      isVercelDomain = false;
+    }
+
+    const isAllowed =
+      allowedOrigins.includes(normalizedOrigin) ||
+      isVercelDomain ||
+      process.env.CLIENT_URL === '*';
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin ${requestOrigin} not allowed by CORS`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+};
+
 // Middlewares
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || '*',
-    credentials: true,
-  })
-);
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== 'test') {
@@ -45,7 +89,7 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/api/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -53,9 +97,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Routes
+// Routes (supports both /api and root paths for frontend flexibility)
 app.use('/api/auth', authRoutes);
+app.use('/auth', authRoutes);
 app.use('/api/applications', jobApplicationRoutes);
+app.use('/applications', jobApplicationRoutes);
 
 // 404 Handler for undefined routes
 app.use('*', (req, res) => {
